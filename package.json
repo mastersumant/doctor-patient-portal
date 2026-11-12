@@ -12,9 +12,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint src",
-    "generate:data": "tsx --tsconfig scripts/tsconfig.json scripts/generate-data.ts"
+    "generate:data": "tsx --tsconfig scripts/tsconfig.json scripts/generate-data.ts",
+    "dev:api": "tsx --tsconfig scripts/tsconfig.json scripts/dev-api.ts",
+    "db:migrate": "tsx --tsconfig scripts/tsconfig.json scripts/db-migrate.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.27.0",
     "@clerk/react": "^6.18.6",
     "@fontsource/atkinson-hyperlegible-next": "^5.3.0",
     "@hookform/resolvers": "^7.0.6",
@@ -24,6 +27,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "lucide-react": "^1.72.0",
+    "postgres": "^4.1.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-hook-form": "^7.92.0",
@@ -32,6 +36,9 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "@electric-sql/pglite-socket": "^0.2.19",
+    "@netlify/functions": "^6.1.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",

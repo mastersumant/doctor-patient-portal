@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/Button'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
-import { ALLOWED_UPLOAD_TYPES, DOCUMENT_TYPES, MAX_UPLOAD_BYTES } from '@/domain/constants'
+import { ALLOWED_UPLOAD_TYPES, DOCUMENT_TYPES } from '@/domain/constants'
+import { env } from '@/config/env'
 import { useFeedback } from '@/context/FeedbackContext'
 import { useServices } from '@/context/ServicesContext'
 import { useQuery } from '@/hooks/useQuery'
@@ -62,7 +63,7 @@ export function DocumentUploadModal({ open, onClose, patientId }: { open: boolea
       open={open}
       onClose={close}
       title="Add a report or document"
-      description={`PDF, JPEG, PNG or WebP up to ${formatBytes(MAX_UPLOAD_BYTES)}. Files stay on this device.`}
+      description={`PDF, JPEG, PNG or WebP up to ${formatBytes(env.maxUploadBytes)}. ${env.storageType === 'API' ? 'Stored securely on the server.' : 'Files stay on this device.'}`}
       footer={
         <>
           <Button variant="secondary" onClick={close}>
@@ -85,8 +86,8 @@ export function DocumentUploadModal({ open, onClose, patientId }: { open: boolea
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null
                 setFileError(null)
-                if (f && f.size > MAX_UPLOAD_BYTES) {
-                  setFileError(`Files must be ${formatBytes(MAX_UPLOAD_BYTES)} or smaller`)
+                if (f && f.size > env.maxUploadBytes) {
+                  setFileError(`Files must be ${formatBytes(env.maxUploadBytes)} or smaller`)
                   setFile(null)
                   return
                 }

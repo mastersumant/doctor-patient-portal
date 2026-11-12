@@ -10,7 +10,7 @@ import { useAuthState } from '@/auth/AuthContext'
 
 interface ServicesState {
   services: Services
-  /** True when the browser blocked IndexedDB and data only lives for this tab. */
+  /** True when data only lives for this tab (blocked IndexedDB or MEMORY storage). */
   ephemeral: boolean
 }
 
@@ -29,9 +29,11 @@ const WorkspaceCtx = createContext<WorkspaceState | null>(null)
  * through a ref, so the doctor ID always comes from the auth session.
  */
 export function ServicesProvider({ children, fallback }: { children: ReactNode; fallback: ReactNode }) {
-  const { identity } = useAuthState()
+  const { identity, getToken } = useAuthState()
   const identityRef = useRef<SessionIdentity | null>(identity)
   identityRef.current = identity
+  const tokenRef = useRef(getToken)
+  tokenRef.current = getToken
 
   const [state, setState] = useState<ServicesState | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
@@ -40,6 +42,12 @@ export function ServicesProvider({ children, fallback }: { children: ReactNode; 
     let cancelled = false
     ;(async () => {
       try {
+        if (env.storageType === 'API') {
+          const { createHttpServices } = await import('@/data/http/httpServices')
+          const services = createHttpServices({ getToken: () => tokenRef.current(), getIdentity: () => identityRef.current })
+          if (!cancelled) setState({ services, ephemeral: false })
+          return
+        }
         const { repos, fellBack } = await createRepositoriesWithFallback(env.storageType)
         if (env.demoMode) await ensureDemoData(repos)
         const services = createServices(repos, { getIdentity: () => identityRef.current })

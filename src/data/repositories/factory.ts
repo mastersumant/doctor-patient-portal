@@ -14,6 +14,8 @@ export async function createRepositories(storageType: StorageType): Promise<Repo
     }
     case 'MEMORY':
       return createMemoryRepositories()
+    case 'POSTGRES':
+      throw new Error('Postgres repositories run on the server (netlify/functions/api.mts), not in the browser.')
     default: {
       const unknown: never = storageType
       throw new Error(`Unsupported STORAGE_TYPE "${String(unknown)}"`)

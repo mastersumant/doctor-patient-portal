@@ -150,4 +150,4 @@ export interface RepositoryRegistry {
   meta: MetaStore
 }
 
-export type StorageType = 'INDEXEDDB' | 'MEMORY'
+export type StorageType = 'INDEXEDDB' | 'MEMORY' | 'POSTGRES'

@@ -66,6 +66,8 @@ function decode(col: ColumnSpec, raw: unknown): { ok: true; value: unknown } | {
       const s = String(raw).trim()
       return col.enumValues?.includes(s) ? { ok: true, value: s } : { ok: false, error: `must be one of: ${col.enumValues?.join(', ')}` }
     }
+    case 'bytes':
+      return { ok: true, value: raw }
     case 'json': {
       if (typeof raw === 'object') return { ok: true, value: raw }
       try {

@@ -2,9 +2,14 @@
 
 A React + TypeScript portal for doctors to manage patients, visits and vitals, diagnoses, versioned prescriptions with PDF output, a medicine catalog, appointments, follow-ups, documents, dashboards and reports.
 
-This build is **frontend-only** (no backend service). All business rules live in a plain-TypeScript service layer that talks to storage through repository interfaces. Today the repositories persist to the browser's IndexedDB; workspaces export to and import from Excel. When a backend is added, the services and repository contracts move to the server unchanged and the UI swaps to an HTTP client — see [docs/architecture.md](docs/architecture.md).
+It runs in two modes, chosen by `VITE_STORAGE_TYPE`:
 
-> **Prototype for synthetic data only.** Data lives in the browser on one device. Do not enter real patient information until the app runs against a secured backend database with server-side Clerk verification.
+- **Browser mode** (default): records are stored in the browser on one device. Good for demos; no backend needed.
+- **Server mode** (`API`): records are stored in **Supabase Postgres** through one **Netlify Function** that verifies each request's Clerk session. Records saved on any device appear on all of them. This is what `netlify.toml` deploys.
+
+Both modes run the same plain-TypeScript service layer (all business rules) over storage-specific repositories, so behaviour is identical. See [docs/architecture.md](docs/architecture.md).
+
+> Browser mode is for synthetic data only. For real patients, use server mode on Supabase's Pro plan and read section 6 of the setup guide.
 
 ## Quick start
 
@@ -23,7 +28,19 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Step-by-step Clerk and SSO setup: [docs/setup-guide.md](docs/setup-guide.md).
+Step-by-step Clerk, Supabase and Netlify setup: [docs/setup-guide.md](docs/setup-guide.md).
+
+### Server mode locally
+
+```bash
+# .env.local: VITE_STORAGE_TYPE=API, VITE_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY
+npm run dev:api        # API on :8787 with an embedded Postgres (or your Supabase via DATABASE_URL)
+npm run dev            # app on :5173, /api proxied to the API
+```
+
+### Deploy
+
+Create a Supabase project, run `npm run db:migrate`, set `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` and `DATABASE_URL` in Netlify, and deploy. `/api/health` confirms the database connection.
 
 ## What's included
 
@@ -53,7 +70,9 @@ Cross-cutting: doctor-level data isolation enforced in every repository call, so
 | `npm test` | Unit and integration tests (Vitest; services on both in-memory and IndexedDB storage) |
 | `npm run typecheck` | TypeScript only |
 | `npm run lint` | oxlint |
-| `npm run generate:data` | Regenerate `data/*.xlsx` sample files and `docs/schema.*.sql` from the seed and table specs |
+| `npm run dev:api` | Local API server (same code as the Netlify Function) |
+| `npm run db:migrate` | Create the tables in Supabase / Postgres |
+| `npm run generate:data` | Regenerate `data/*.xlsx`, `docs/schema.*.sql` and the Supabase migration from the seed and table specs |
 
 ## Project structure
 
@@ -67,7 +86,9 @@ doctor-patient-portal/
 │   │   ├── repositories/  interfaces.ts, queryEngine.ts, indexeddb/, memory/, factory.ts
 │   │   ├── schema/        table specs (→ Excel sheets, SQL DDL) and row codec
 │   │   ├── excel/         workbook read/write (ExcelJS, lazy-loaded), report exports
+│   │   ├── http/          Services over HTTP for server mode
 │   │   └── seed/          deterministic synthetic demo data
+│   ├── server/            API handler, Clerk verification, Postgres repositories, migration
 │   ├── auth/              Clerk integration (lazy-loaded), demo mode, route guard
 │   ├── context/           services/workspace providers, toasts and confirmations
 │   ├── hooks/             useQuery (re-runs on any write), useDebounced
@@ -75,7 +96,9 @@ doctor-patient-portal/
 │   ├── layouts/           app shell: sidebar, header, notifications
 │   ├── pages/             one folder per module
 │   └── utils/             dates, clinical maths, IDs, PDF builder
-├── tests/                 Vitest suites
+├── netlify/functions/     api.mts: the one serverless function (/api/*)
+├── supabase/migrations/   generated SQL for the clinicdesk schema
+├── tests/                 Vitest suites (+ PGlite-backed Postgres)
 ├── scripts/               data and schema generator
 ├── data/                  sample Excel files (one per table + importable workbooks)
 └── docs/                  architecture, schema (+ .sql), API contract, setup guide
@@ -89,15 +112,15 @@ doctor-patient-portal/
 
 ## Testing
 
-`npm test` runs 32 tests against both the in-memory and IndexedDB repositories, covering CRUD, validation, doctor isolation at service and repository level, visit → follow-up → appointment links, prescription versioning and issue-time snapshots, appointment overlap rules, upload sniffing, the audit trail, seed integrity (all foreign keys valid, no overlapping slots), persistence across a new database connection, and Excel export → import round-trips including rejection of broken or foreign workbooks.
+`npm test` runs 60 tests. The service suite runs against in-memory, IndexedDB **and real PostgreSQL** (PGlite, Postgres compiled to WebAssembly), covering CRUD, validation, doctor isolation at service and repository level, visit → follow-up → appointment links, prescription versioning and issue-time snapshots, appointment overlap rules, upload sniffing, the audit trail, seed integrity (all foreign keys valid, no overlapping slots), persistence across a new database connection, and Excel export → import round-trips including rejection of broken or foreign workbooks. The API suite drives the browser's HTTP client through the API handler into Postgres (auth, isolation, error mapping, file upload and download, Excel, method allow-list), and checks Clerk token verification with real signed tokens. The Netlify-bundled function was also executed end to end.
 
 The UI was also exercised end to end in Chrome (registration, visits, prescriptions and PDF, revisions, booking and overlap blocking, reports and Excel export, import, uploads, reload persistence, switching doctors, phone layout) with no console errors.
 
 ## Known limitations
 
-- **No server-side enforcement yet.** Isolation is enforced in the service and repository layer and covered by tests, but anyone with access to the browser profile can read IndexedDB directly. Real enforcement needs the backend verifying Clerk session tokens, as described in the architecture doc.
-- **Clerk is wired but untested against a live instance** in this build because no key was available. Without a key the app runs in demo mode only.
-- Data is per browser and device. Use Excel export/import to move a workspace.
+- In **browser mode**, anyone with access to the browser profile can read IndexedDB directly, and data stays on one device. Server mode removes both limits.
+- **Not yet run against live Clerk, Supabase or Netlify accounts** (none were available while building). The server was tested with real Postgres (PGlite), real Clerk token verification using locally signed tokens, and Netlify's own bundler. Check `/api/health` after your first deploy.
+- In server mode, document uploads are limited to 4 MB (Netlify's function request limit), and files are stored in Postgres.
 - The downloadable PDF uses jsPDF's built-in Latin fonts; for names in other scripts, use **Print** (browser print-to-PDF renders any script).
 - Temperature is recorded in °F.
 - The ICD-10 list is a small offline quick-pick, not a coding service.

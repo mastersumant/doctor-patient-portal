@@ -24,7 +24,7 @@ import {
   VISIT_TYPES,
 } from '@/domain/constants'
 
-export type ColumnType = 'id' | 'text' | 'longtext' | 'int' | 'decimal' | 'date' | 'datetime' | 'time' | 'bool' | 'json' | 'enum'
+export type ColumnType = 'id' | 'text' | 'longtext' | 'int' | 'decimal' | 'date' | 'datetime' | 'time' | 'bool' | 'json' | 'enum' | 'bytes'
 
 export interface ColumnSpec {
   key: string
@@ -33,6 +33,11 @@ export interface ColumnSpec {
   enumValues?: readonly string[]
   /** Foreign key target as "table.column". */
   ref?: string
+  /**
+   * A cross-link checked on import but not enforced as a SQL foreign key, because
+   * the links are circular (visit ↔ appointment ↔ follow-up) or self-referencing.
+   */
+  softRef?: boolean
   maxLength?: number
 }
 
@@ -131,7 +136,7 @@ export const TABLES: TableSpec[] = [
       c('treatmentPlan', 'longtext'),
       c('notes', 'longtext'),
       c('followUpDate', 'date', { nullable: true }),
-      c('appointmentId', 'id', { nullable: true, ref: 'appointments.appointmentId' }),
+      c('appointmentId', 'id', { nullable: true, ref: 'appointments.appointmentId', softRef: true }),
       ...timestamps,
       softDelete,
     ],
@@ -168,7 +173,7 @@ export const TABLES: TableSpec[] = [
       c('rxNumber', 'text', { maxLength: 20 }),
       c('version', 'int'),
       c('status', 'enum', { enumValues: PRESCRIPTION_STATUSES }),
-      c('supersededById', 'id', { nullable: true, ref: 'prescriptions.prescriptionId' }),
+      c('supersededById', 'id', { nullable: true, ref: 'prescriptions.prescriptionId', softRef: true }),
       c('patientId', 'id', { ref: 'patients.patientId' }),
       doctorFk,
       c('visitId', 'id', { nullable: true, ref: 'visits.visitId' }),
@@ -244,7 +249,7 @@ export const TABLES: TableSpec[] = [
       c('reason', 'text', { maxLength: 300 }),
       c('status', 'enum', { enumValues: APPOINTMENT_STATUSES }),
       c('notes', 'longtext'),
-      c('followUpId', 'id', { nullable: true, ref: 'followups.followUpId' }),
+      c('followUpId', 'id', { nullable: true, ref: 'followups.followUpId', softRef: true }),
       ...timestamps,
       softDelete,
     ],
@@ -262,7 +267,7 @@ export const TABLES: TableSpec[] = [
       c('dueDate', 'date'),
       c('reason', 'text', { maxLength: 300 }),
       c('status', 'enum', { enumValues: FOLLOWUP_STATUSES }),
-      c('appointmentId', 'id', { nullable: true, ref: 'appointments.appointmentId' }),
+      c('appointmentId', 'id', { nullable: true, ref: 'appointments.appointmentId', softRef: true }),
       c('notes', 'longtext'),
       ...timestamps,
     ],
@@ -305,6 +310,30 @@ export const AUDIT_TABLE: TableSpec = {
     c('detail', 'text', { maxLength: 400 }),
     c('at', 'datetime'),
   ],
+}
+
+/** Server-only tables: binary files (documents, photos, signatures) and app metadata. */
+export const FILES_TABLE: TableSpec = {
+  name: 'stored_files',
+  label: 'Stored files',
+  primaryKey: 'fileId',
+  indexes: [['doctorId']],
+  columns: [
+    c('fileId', 'id'),
+    c('doctorId', 'id'),
+    c('fileName', 'text', { maxLength: 200 }),
+    c('mimeType', 'text', { maxLength: 80 }),
+    c('sizeBytes', 'int'),
+    c('data', 'bytes'),
+    c('createdAt', 'datetime'),
+  ],
+}
+
+export const META_TABLE: TableSpec = {
+  name: 'app_meta',
+  label: 'App metadata',
+  primaryKey: 'key',
+  columns: [c('key', 'text', { maxLength: 100 }), c('value', 'json')],
 }
 
 export const TABLES_BY_NAME = Object.fromEntries(TABLES.map((t) => [t.name, t])) as Record<string, TableSpec>

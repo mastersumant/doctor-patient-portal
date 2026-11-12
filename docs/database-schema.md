@@ -4,7 +4,8 @@ The table layout is defined once in `src/data/schema/tables.ts` and drives:
 
 - IndexedDB object stores (one per table, each with a `doctorId` index),
 - Excel workbooks (one sheet per table; `data/<table>.xlsx` holds one file per table),
-- the generated DDL: [`schema.postgresql.sql`](schema.postgresql.sql) and [`schema.mysql.sql`](schema.mysql.sql) (regenerate with `npm run generate:data`).
+- the generated DDL: [`schema.postgresql.sql`](schema.postgresql.sql) and [`schema.mysql.sql`](schema.mysql.sql) (regenerate with `npm run generate:data`),
+- the Supabase migration in `supabase/migrations/`, which also creates the server-only `stored_files` and `app_meta` tables in a dedicated `clinicdesk` schema with row-level security enabled.
 
 Column names are camelCase in the app and Excel, snake_case in SQL. IDs are short prefixed strings (`PT-7K3M9Q`, `RX-24A7KD`) using Crockford base32, so they read aloud without 0/O or 1/I confusion.
 

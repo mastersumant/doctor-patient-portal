@@ -21,7 +21,8 @@ export default defineConfig(({ mode }) => {
     build: {
       chunkSizeWarningLimit: 1000,
     },
-    server: { port: 5173 },
+    // In API mode the browser calls /api; locally that's `npm run dev:api` on port 8787.
+    server: { port: 5173, proxy: { '/api': { target: 'http://localhost:8787', changeOrigin: false } } },
     preview: { port: 4173 },
     test: {
       environment: 'node',

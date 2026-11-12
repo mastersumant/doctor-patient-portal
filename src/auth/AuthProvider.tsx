@@ -53,6 +53,7 @@ function DemoOnlyAuth({ children }: { children: ReactNode }) {
       identity,
       enterDemo,
       signOut: async () => leaveDemo(),
+      getToken: async () => null,
     }
   }, [demoId, enterDemo, leaveDemo])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

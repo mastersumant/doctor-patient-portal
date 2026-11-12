@@ -1,37 +1,33 @@
 # Architecture
 
-## Layers today (no backend)
+## Layers
 
 ```
 React pages and components
-        │  useServices(), useQuery()
-        ▼
-Business services            src/services/*        plain TypeScript, no React, no browser APIs*
-        │  repository interfaces
-        ▼
-Repository contracts         src/data/repositories/interfaces.ts
-        │
-        ├── IndexedDB repositories   (default, persistent)        src/data/repositories/indexeddb/
-        └── In-memory repositories   (tests, blocked-storage fallback)  src/data/repositories/memory/
+        │  useServices(): the Services interface
+        ├─────────────────────────────────────────────┐
+        │ browser mode                                │ server mode (VITE_STORAGE_TYPE=API)
+        ▼                                             ▼
+Business services (src/services)              HTTP client (src/data/http)
+        │                                             │  POST /api/rpc/<service>/<method> + Clerk token
+        ▼                                             ▼
+IndexedDB / in-memory repositories            Netlify Function (netlify/functions/api.mts)
+                                                      │  verify token → same business services
+                                                      ▼
+                                              Postgres repositories (src/server/postgres) → Supabase
 ```
 
-\* `FileService` uses `Blob`, which exists in browsers and in Node 18+.
+The business services are plain TypeScript with no React or browser dependencies, so the **same code** runs in the browser (browser mode) and inside the Netlify Function (server mode). Repository contracts (`src/data/repositories/interfaces.ts`) have three implementations: IndexedDB, in-memory and PostgreSQL. The service test suite runs against all three.
 
-`src/data/repositories/factory.ts` is the only file that knows which implementation is in use, chosen by `VITE_STORAGE_TYPE`.
+The HTTP client implements the same `Services` TypeScript interface as the services, so pages don't know which mode they're in. Write calls notify the client's change bus, so open lists refresh the same way in both modes.
 
-## Layers after adding a backend
+### Server specifics
 
-```
-React pages ──► HttpServices (same method names) ──► REST API (Express) ──► the same services ──► SQL / Excel repositories
-```
-
-The move is mechanical:
-
-1. Copy `src/domain`, `src/validations`, `src/services` and `src/data/repositories/interfaces.ts` into the backend. They have no UI dependencies.
-2. Implement the repository contracts for PostgreSQL/MySQL (Prisma or Sequelize) or ExcelJS files. Use `docs/schema.postgresql.sql` / `schema.mysql.sql` as the starting schema; they are generated from `src/data/schema/tables.ts`.
-3. Expose each service method as an endpoint per [api-documentation.md](api-documentation.md). Controllers stay thin: parse the request, call the service, map `AppError` codes to HTTP statuses.
-4. Build `Session` from the **verified Clerk session token** on the server (`@clerk/express` middleware) instead of the browser. Services already read the doctor ID only from `Session.getIdentity()`, never from request bodies.
-5. In the frontend, implement `Services` with `fetch` calls (the TypeScript interface in `src/services/index.ts` guarantees the same shape) and register it in `ServicesProvider` when `VITE_STORAGE_TYPE=API`. Pages and components don't change.
+- `src/server/apiHandler.ts` is platform-neutral (Web `Request`/`Response`). The Netlify Function and the local `npm run dev:api` server both use it.
+- Only methods listed in `src/services/rpcMethods.ts` are reachable. Internal helpers (for example creating a follow-up from a visit) can't be called directly.
+- The database connection is created once per warm function instance (one pooled connection, prepared statements off for Supabase's transaction pooler).
+- Tables are in a dedicated `clinicdesk` schema with row-level security enabled and no policies, so Supabase's Data API can't expose them; the function connects as the table owner.
+- Files (documents, photos, signatures) are stored in `clinicdesk.stored_files` behind the `FileStore` contract.
 
 ## Doctor-level isolation
 
@@ -42,7 +38,7 @@ Isolation is enforced twice:
 
 Tests cover both levels (`tests/services.test.ts → isolates each doctor's records`).
 
-**Limit of a frontend-only build:** the browser holds the data, so someone with access to the device profile can read IndexedDB with developer tools. That is acceptable only for synthetic demo data. With the backend, data never reaches a browser that isn't entitled to it.
+In **server mode** the doctor ID comes from the verified Clerk token's `sub` claim on the server; the browser can't influence it. In **browser mode** the browser holds the data, so someone with access to the device profile can read IndexedDB with developer tools; that is acceptable only for synthetic demo data.
 
 ## Clinical-record rules
 
@@ -63,7 +59,7 @@ Tests cover both levels (`tests/services.test.ts → isolates each doctor's reco
 
 IndexedDB transactions are atomic and serialised per store, which gives the guarantees the original Excel design needed file locking and atomic renames for. The prescription save writes header, lines and the supersede flag in one transaction across two stores.
 
-An Excel repository on a future Node backend should keep a per-file async mutex, write to a temp file and `rename()` atomically, and keep the same contracts.
+In Postgres, the prescription save is one transaction. Foreign keys enforce parent links (patient → visit → diagnosis, prescription → medicine lines); the circular cross-links between visits, appointments and follow-ups are checked by the app instead, so bulk imports can load tables in a fixed order.
 
 ## Front-end structure
 

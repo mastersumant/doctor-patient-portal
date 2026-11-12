@@ -9,6 +9,8 @@ export interface AuthState {
   mode: 'clerk' | 'demo' | null
   identity: SessionIdentity | null
   signOut: () => Promise<void>
+  /** Session token for API calls (Clerk). Null in demo mode. */
+  getToken: () => Promise<string | null>
   /** Demo mode only: enter one of the synthetic doctor workspaces. */
   enterDemo: ((doctorId: string) => void) | null
 }

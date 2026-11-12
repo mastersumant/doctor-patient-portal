@@ -23,7 +23,7 @@ async function sniffMime(file: Blob): Promise<string | null> {
 export class FileService extends BaseService {
   /** Validates type (by content, not extension) and size, then stores the binary. */
   async store(file: Blob & { name?: string }, opts: { imagesOnly?: boolean } = {}): Promise<StoredFile> {
-    const maxBytes = opts.imagesOnly ? MAX_IMAGE_BYTES : MAX_UPLOAD_BYTES
+    const maxBytes = opts.imagesOnly ? MAX_IMAGE_BYTES : (this.serviceOptions.maxUploadBytes ?? MAX_UPLOAD_BYTES)
     if (file.size === 0) throw new ValidationError('The file is empty', { file: 'The file is empty' })
     if (file.size > maxBytes) {
       const msg = `Files must be ${formatBytes(maxBytes)} or smaller`

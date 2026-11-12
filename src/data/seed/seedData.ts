@@ -621,20 +621,26 @@ export async function applySeed(repos: RepositoryRegistry, bundle: SeedBundle, o
 }
 
 export async function clearWorkspace(repos: RepositoryRegistry, doctorId: string, opts: { keepProfile?: boolean } = {}): Promise<void> {
-  await Promise.all([
-    repos.patients.removeAllForDoctor(doctorId),
-    repos.visits.removeAllForDoctor(doctorId),
-    repos.diagnoses.removeAllForDoctor(doctorId),
-    repos.prescriptions.removeAllForDoctor(doctorId),
-    repos.prescriptionMedicines.removeAllForDoctor(doctorId),
-    repos.medicines.removeAllForDoctor(doctorId),
-    repos.appointments.removeAllForDoctor(doctorId),
-    repos.followUps.removeAllForDoctor(doctorId),
-    repos.documents.removeAllForDoctor(doctorId),
-    repos.files.removeAllForDoctor(doctorId),
-    repos.audit.removeAllForDoctor(doctorId),
-  ])
+  await removeWorkspaceRecords(repos, doctorId)
+  await repos.files.removeAllForDoctor(doctorId)
+  await repos.audit.removeAllForDoctor(doctorId)
   if (!opts.keepProfile) await repos.doctors.remove(doctorId)
+}
+
+/** Deletes a doctor's clinical records, children before parents so SQL foreign keys accept every step. */
+export async function removeWorkspaceRecords(repos: RepositoryRegistry, doctorId: string): Promise<void> {
+  const order = [
+    repos.prescriptionMedicines,
+    repos.prescriptions,
+    repos.diagnoses,
+    repos.documents,
+    repos.followUps,
+    repos.appointments,
+    repos.visits,
+    repos.patients,
+    repos.medicines,
+  ]
+  for (const repo of order) await repo.removeAllForDoctor(doctorId)
 }
 
 export const SEED_VERSION = 1

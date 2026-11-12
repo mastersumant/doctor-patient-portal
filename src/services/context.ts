@@ -37,17 +37,20 @@ export interface ServiceDeps {
   repos: RepositoryRegistry
   session: Session
   bus: ChangeBus
+  options?: { maxUploadBytes?: number }
 }
 
 export abstract class BaseService {
   protected readonly repos: RepositoryRegistry
   protected readonly session: Session
   protected readonly bus: ChangeBus
+  protected readonly serviceOptions: NonNullable<ServiceDeps['options']>
 
   constructor(deps: ServiceDeps) {
     this.repos = deps.repos
     this.session = deps.session
     this.bus = deps.bus
+    this.serviceOptions = deps.options ?? {}
   }
 
   /** The tenant key for every query. Derived from the session only. */

@@ -1,6 +1,4 @@
 -- ClinicDesk schema (PostgreSQL), generated from src/data/schema/tables.ts.
--- Every clinical table carries doctor_id (tenant key). Repositories must filter on it in every statement.
--- Consider enabling row-level security on doctor_id as a second line of defence.
 
 CREATE TABLE "doctors" (
   "doctor_id" VARCHAR(64) NOT NULL,
@@ -243,15 +241,13 @@ CREATE TABLE "audit_logs" (
 CREATE INDEX "ix_audit_logs_doctor" ON "audit_logs" ("doctor_id");
 CREATE INDEX "ix_audit_logs_doctor_id_at" ON "audit_logs" ("doctor_id", "at");
 
--- Foreign keys are added after all tables exist (some references are circular, e.g. visits ↔ appointments).
+-- Foreign keys. Circular cross-links (visit ↔ appointment ↔ follow-up) are checked by the app, not the database.
 ALTER TABLE "patients" ADD CONSTRAINT "fk_patients_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
 ALTER TABLE "visits" ADD CONSTRAINT "fk_visits_patient_id" FOREIGN KEY ("patient_id") REFERENCES "patients" ("patient_id");
 ALTER TABLE "visits" ADD CONSTRAINT "fk_visits_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
-ALTER TABLE "visits" ADD CONSTRAINT "fk_visits_appointment_id" FOREIGN KEY ("appointment_id") REFERENCES "appointments" ("appointment_id");
 ALTER TABLE "diagnoses" ADD CONSTRAINT "fk_diagnoses_patient_id" FOREIGN KEY ("patient_id") REFERENCES "patients" ("patient_id");
 ALTER TABLE "diagnoses" ADD CONSTRAINT "fk_diagnoses_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
 ALTER TABLE "diagnoses" ADD CONSTRAINT "fk_diagnoses_visit_id" FOREIGN KEY ("visit_id") REFERENCES "visits" ("visit_id");
-ALTER TABLE "prescriptions" ADD CONSTRAINT "fk_prescriptions_superseded_by_id" FOREIGN KEY ("superseded_by_id") REFERENCES "prescriptions" ("prescription_id");
 ALTER TABLE "prescriptions" ADD CONSTRAINT "fk_prescriptions_patient_id" FOREIGN KEY ("patient_id") REFERENCES "patients" ("patient_id");
 ALTER TABLE "prescriptions" ADD CONSTRAINT "fk_prescriptions_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
 ALTER TABLE "prescriptions" ADD CONSTRAINT "fk_prescriptions_visit_id" FOREIGN KEY ("visit_id") REFERENCES "visits" ("visit_id");
@@ -261,11 +257,9 @@ ALTER TABLE "prescription_medicines" ADD CONSTRAINT "fk_prescription_medicines_m
 ALTER TABLE "medicines" ADD CONSTRAINT "fk_medicines_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
 ALTER TABLE "appointments" ADD CONSTRAINT "fk_appointments_patient_id" FOREIGN KEY ("patient_id") REFERENCES "patients" ("patient_id");
 ALTER TABLE "appointments" ADD CONSTRAINT "fk_appointments_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
-ALTER TABLE "appointments" ADD CONSTRAINT "fk_appointments_follow_up_id" FOREIGN KEY ("follow_up_id") REFERENCES "followups" ("follow_up_id");
 ALTER TABLE "followups" ADD CONSTRAINT "fk_followups_patient_id" FOREIGN KEY ("patient_id") REFERENCES "patients" ("patient_id");
 ALTER TABLE "followups" ADD CONSTRAINT "fk_followups_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
 ALTER TABLE "followups" ADD CONSTRAINT "fk_followups_visit_id" FOREIGN KEY ("visit_id") REFERENCES "visits" ("visit_id");
-ALTER TABLE "followups" ADD CONSTRAINT "fk_followups_appointment_id" FOREIGN KEY ("appointment_id") REFERENCES "appointments" ("appointment_id");
 ALTER TABLE "medical_documents" ADD CONSTRAINT "fk_medical_documents_patient_id" FOREIGN KEY ("patient_id") REFERENCES "patients" ("patient_id");
 ALTER TABLE "medical_documents" ADD CONSTRAINT "fk_medical_documents_doctor_id" FOREIGN KEY ("doctor_id") REFERENCES "doctors" ("doctor_id");
 ALTER TABLE "medical_documents" ADD CONSTRAINT "fk_medical_documents_visit_id" FOREIGN KEY ("visit_id") REFERENCES "visits" ("visit_id");

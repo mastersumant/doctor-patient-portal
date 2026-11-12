@@ -2,7 +2,7 @@ import type { Doctor } from '@/domain/types'
 import { buildWorkbook, readWorkbook, workbookToBlob, type SheetData } from '@/data/excel/excelWorkbook'
 import { checkReferences, fromRows, toRow } from '@/data/schema/rowCodec'
 import { TABLES, type TableSpec } from '@/data/schema/tables'
-import { applySeed, buildSeed, clearWorkspace, DEMO_DOCTORS } from '@/data/seed/seedData'
+import { applySeed, buildSeed, clearWorkspace, DEMO_DOCTORS, removeWorkspaceRecords } from '@/data/seed/seedData'
 import { nowIso } from '@/utils/dates'
 import { BaseService } from './context'
 import { ValidationError } from './errors'
@@ -139,17 +139,7 @@ export class DataService extends BaseService {
     const keepFiles = new Set((d.medical_documents ?? []).map((x) => String(x.fileId)))
     const existingDocs = await r.documents.findAll(doctorId, { includeDeleted: true })
     for (const doc of existingDocs) if (!keepFiles.has(doc.fileId)) await r.files.remove(doctorId, doc.fileId)
-    await Promise.all([
-      r.patients.removeAllForDoctor(doctorId),
-      r.visits.removeAllForDoctor(doctorId),
-      r.diagnoses.removeAllForDoctor(doctorId),
-      r.prescriptions.removeAllForDoctor(doctorId),
-      r.prescriptionMedicines.removeAllForDoctor(doctorId),
-      r.medicines.removeAllForDoctor(doctorId),
-      r.appointments.removeAllForDoctor(doctorId),
-      r.followUps.removeAllForDoctor(doctorId),
-      r.documents.removeAllForDoctor(doctorId),
-    ])
+    await removeWorkspaceRecords(r, doctorId)
     const up = async <T>(repo: { bulkUpsert(doctorId: string, rows: T[]): Promise<void> }, rows: Row[] | undefined) =>
       repo.bulkUpsert(doctorId, (rows ?? []) as unknown as T[])
     await up(r.medicines, d.medicines)

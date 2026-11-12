@@ -18,17 +18,16 @@ export function pluralize(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`
 }
 
-export function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(blob)
-  })
+/** Works in browsers and in Node (no FileReader), so services can run server-side. */
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`
 }
 
 export function downloadBlob(blob: Blob, fileName: string): void {
-  if (import.meta.env.VITE_SANDBOX_PREVIEW === 'true') {
+  if ((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_SANDBOX_PREVIEW === 'true') {
     throw new Error('Downloads are turned off in this hosted preview. Run the app locally to download PDFs and Excel files.')
   }
   const url = URL.createObjectURL(blob)

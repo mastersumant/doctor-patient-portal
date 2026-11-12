@@ -6,12 +6,13 @@ import { AuthContext, type AuthState } from './AuthContext'
 import { demoIdentity, useDemoSelection } from './AuthProvider'
 
 function ClerkBridge({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn, signOut } = useAuth()
+  const { isLoaded, isSignedIn, signOut, getToken } = useAuth()
   const { user } = useUser()
   const { demoId, enterDemo, leaveDemo } = useDemoSelection()
 
   const value = useMemo<AuthState>(() => {
-    if (!isLoaded) return { status: 'loading', mode: null, identity: null, enterDemo, signOut: async () => undefined }
+    const noToken = async () => null
+    if (!isLoaded) return { status: 'loading', mode: null, identity: null, enterDemo, signOut: async () => undefined, getToken: noToken }
     if (isSignedIn && user) {
       const identity: SessionIdentity = {
         userId: user.id,
@@ -19,12 +20,12 @@ function ClerkBridge({ children }: { children: ReactNode }) {
         email: user.primaryEmailAddress?.emailAddress ?? '',
         imageUrl: user.imageUrl ?? '',
       }
-      return { status: 'signed-in', mode: 'clerk', identity, enterDemo: null, signOut: () => signOut() }
+      return { status: 'signed-in', mode: 'clerk', identity, enterDemo: null, signOut: () => signOut(), getToken: () => getToken() }
     }
     const demo = demoIdentity(demoId)
-    if (demo) return { status: 'signed-in', mode: 'demo', identity: demo, enterDemo, signOut: async () => leaveDemo() }
-    return { status: 'signed-out', mode: null, identity: null, enterDemo, signOut: async () => undefined }
-  }, [isLoaded, isSignedIn, user, signOut, demoId, enterDemo, leaveDemo])
+    if (demo) return { status: 'signed-in', mode: 'demo', identity: demo, enterDemo, signOut: async () => leaveDemo(), getToken: noToken }
+    return { status: 'signed-out', mode: null, identity: null, enterDemo, signOut: async () => undefined, getToken: noToken }
+  }, [isLoaded, isSignedIn, user, signOut, getToken, demoId, enterDemo, leaveDemo])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

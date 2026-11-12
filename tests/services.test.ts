@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryRepositories } from '@/data/repositories/memory/memoryRepositories'
 import { createIndexedDbRepositories } from '@/data/repositories/indexeddb/indexedDbRepositories'
 import type { RepositoryRegistry } from '@/data/repositories/interfaces'
@@ -10,6 +10,12 @@ import { buildSeed, DEMO_DOCTORS, ensureDemoData } from '@/data/seed/seedData'
 import { checkReferences, toRow } from '@/data/schema/rowCodec'
 import { TABLES } from '@/data/schema/tables'
 import { makeTinyPdf } from '@/data/seed/tinyPdf'
+import { createPostgresRepositories } from '@/server/postgres/pgRepositories'
+import { startTestPg } from './support/pg'
+
+// Real PostgreSQL (PGlite) so the server repositories run the same suite as the browser ones.
+const pg = await startTestPg(55433)
+afterAll(() => pg.stop())
 
 const DR_A: SessionIdentity = { userId: 'user_A', fullName: 'Dr. A', email: 'a@example.com', imageUrl: '' }
 const DR_B: SessionIdentity = { userId: 'user_B', fullName: 'Dr. B', email: 'b@example.com', imageUrl: '' }
@@ -123,6 +129,13 @@ let dbCounter = 0
 const implementations: Array<[string, () => Promise<RepositoryRegistry>]> = [
   ['memory', async () => createMemoryRepositories()],
   ['indexeddb', async () => createIndexedDbRepositories(`test-db-${++dbCounter}`)],
+  [
+    'postgres',
+    async () => {
+      await pg.reset()
+      return createPostgresRepositories(pg.sql)
+    },
+  ],
 ]
 
 describe.each(implementations)('services on %s storage', (_name, makeRepos) => {
@@ -424,9 +437,9 @@ describe('persistence', () => {
   })
 })
 
-describe('Excel workbook', () => {
+describe.each(implementations.filter(([n]) => n !== 'indexeddb'))('Excel workbook on %s storage', (_name, makeRepos) => {
   it('exports a workspace and imports it back without loss', async () => {
-    const repos = createMemoryRepositories()
+    const repos = await makeRepos()
     const demo = DEMO_DOCTORS[0]
     const session = { getIdentity: () => ({ userId: demo.doctorId, fullName: demo.fullName, email: demo.email, imageUrl: '' }) }
     await ensureDemoData(repos)
@@ -447,7 +460,7 @@ describe('Excel workbook', () => {
   })
 
   it('refuses a workbook whose IDs belong to another doctor, without touching data', async () => {
-    const repos = createMemoryRepositories()
+    const repos = await makeRepos()
     await ensureDemoData(repos)
     const owner = DEMO_DOCTORS[1]
     const ownerSvc = createServices(repos, { getIdentity: () => ({ userId: owner.doctorId, fullName: owner.fullName, email: owner.email, imageUrl: '' }) })
@@ -461,7 +474,7 @@ describe('Excel workbook', () => {
   })
 
   it('rejects a workbook with broken references', async () => {
-    const repos = createMemoryRepositories()
+    const repos = await makeRepos()
     const demo = DEMO_DOCTORS[1]
     const session = { getIdentity: () => ({ userId: demo.doctorId, fullName: demo.fullName, email: demo.email, imageUrl: '' }) }
     await ensureDemoData(repos)

@@ -200,7 +200,7 @@ function DataTab() {
   const clearAll = async () => {
     const ok = await feedback.confirm({
       title: 'Delete everything in this workspace?',
-      message: 'All patients, visits, prescriptions, appointments, follow-ups, medicines and documents in your workspace are permanently deleted from this browser. Your profile is kept. This can’t be undone.',
+      message: 'All patients, visits, prescriptions, appointments, follow-ups, medicines and documents in your workspace are permanently deleted. Your profile is kept. This can’t be undone.',
       confirmLabel: 'Delete all records',
       tone: 'danger',
     })
@@ -212,12 +212,19 @@ function DataTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3 rounded-[var(--radius-panel)] border border-warn-100 bg-warn-50 px-4 py-3 text-sm text-warn-700">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <p>
-          This prototype stores data in your browser (IndexedDB) on this device only. It is for synthetic demo data. Do not enter real patient information until the app runs on a secured backend database.
-        </p>
-      </div>
+      {services.storageType === 'API' ? (
+        <div className="flex items-start gap-3 rounded-[var(--radius-panel)] border border-ok-100 bg-ok-50 px-4 py-3 text-sm text-ok-700">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <p>Records are saved to your clinic’s server database and appear on every device you sign in from.</p>
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 rounded-[var(--radius-panel)] border border-warn-100 bg-warn-50 px-4 py-3 text-sm text-warn-700">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <p>
+            This prototype stores data in your browser (IndexedDB) on this device only. It is for synthetic demo data. Do not enter real patient information until the app runs on a secured backend database.
+          </p>
+        </div>
+      )}
 
       <Panel title="Storage">
         <dl className="grid gap-4 sm:grid-cols-3">
@@ -225,7 +232,7 @@ function DataTab() {
             <dt className="text-[13px] text-muted">Storage</dt>
             <dd className="mt-0.5 flex items-center gap-2 font-semibold">
               <Database className="size-4 text-teal-600" aria-hidden />
-              {services.storageType === 'INDEXEDDB' ? 'Browser database (IndexedDB)' : 'In memory'}
+              {services.storageType === 'API' ? 'Server database (Supabase Postgres)' : services.storageType === 'INDEXEDDB' ? 'Browser database (IndexedDB)' : 'In memory'}
               {ephemeral ? <Badge tone="warn">Lost when the tab closes</Badge> : null}
             </dd>
           </div>
@@ -244,7 +251,7 @@ function DataTab() {
         <div className="grid gap-5 md:grid-cols-2">
           <div className="rounded-[var(--radius-control)] border border-line p-4">
             <h3 className="font-semibold">Export workspace</h3>
-            <p className="mt-1 text-[13.5px] text-muted">Download everything as an .xlsx file. Document files themselves stay in the browser; the workbook lists them.</p>
+            <p className="mt-1 text-[13.5px] text-muted">Download everything as an .xlsx file. Document files themselves aren’t included; the workbook lists them.</p>
             <Button className="mt-3" icon={Download} loading={busy === 'export'} onClick={exportAll}>
               Export to Excel
             </Button>
@@ -281,7 +288,7 @@ function DataTab() {
           </div>
           <div className="rounded-[var(--radius-control)] border border-danger-100 p-4">
             <h3 className="font-semibold">Clear workspace</h3>
-            <p className="mt-1 text-[13.5px] text-muted">Permanently delete every record in your workspace from this browser. Your profile stays.</p>
+            <p className="mt-1 text-[13.5px] text-muted">Permanently delete every record in your workspace. Your profile stays.</p>
             <Button className="mt-3" variant="danger" icon={Trash2} loading={busy === 'clear'} onClick={clearAll}>
               Delete all records
             </Button>

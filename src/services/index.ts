@@ -14,31 +14,40 @@ import { PatientService } from './patientService'
 import { PrescriptionService } from './prescriptionService'
 import { VisitService } from './visitService'
 
+/** Only the public methods of a service: what any transport (direct or HTTP) must provide. */
+export type PublicApi<T> = { [K in keyof T]: T[K] }
+
 /**
- * The application's business API. UI code depends on this shape only.
- * When a backend is introduced, these classes move to the server unchanged and
- * the UI gets an HTTP client implementing the same methods.
+ * The application's business API. UI code depends on this shape only. It is
+ * implemented by the services themselves (browser storage) and by an HTTP client
+ * that runs the same services inside a Netlify Function (STORAGE_TYPE=API).
  */
 export interface Services {
   bus: ChangeBus
-  storageType: RepositoryRegistry['storageType']
-  doctor: DoctorService
-  patients: PatientService
-  visits: VisitService
-  diagnoses: DiagnosisService
-  prescriptions: PrescriptionService
-  medicines: MedicineService
-  appointments: AppointmentService
-  followUps: FollowUpService
-  documents: DocumentService
-  analytics: AnalyticsService
-  audit: AuditService
-  data: DataService
-  files: FileService
+  /** INDEXEDDB / MEMORY run services in the browser; API calls them on the server. */
+  storageType: RepositoryRegistry['storageType'] | 'API'
+  doctor: PublicApi<DoctorService>
+  patients: PublicApi<PatientService>
+  visits: PublicApi<VisitService>
+  diagnoses: PublicApi<DiagnosisService>
+  prescriptions: PublicApi<PrescriptionService>
+  medicines: PublicApi<MedicineService>
+  appointments: PublicApi<AppointmentService>
+  followUps: PublicApi<FollowUpService>
+  documents: PublicApi<DocumentService>
+  analytics: PublicApi<AnalyticsService>
+  audit: PublicApi<AuditService>
+  data: PublicApi<DataService>
+  files: PublicApi<FileService>
 }
 
-export function createServices(repos: RepositoryRegistry, session: Session, bus = new ChangeBus()): Services {
-  const deps: ServiceDeps = { repos, session, bus }
+export interface ServiceOptions {
+  /** Upload size cap; lower when uploads pass through a serverless function. */
+  maxUploadBytes?: number
+}
+
+export function createServices(repos: RepositoryRegistry, session: Session, bus = new ChangeBus(), options: ServiceOptions = {}): Services {
+  const deps: ServiceDeps = { repos, session, bus, options }
   const files = new FileService(deps)
   const followUps = new FollowUpService(deps)
   const appointments = new AppointmentService(deps, followUps)
