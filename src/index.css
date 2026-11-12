@@ -1,0 +1,141 @@
+@import '@fontsource/atkinson-hyperlegible-next/400.css';
+@import '@fontsource/atkinson-hyperlegible-next/500.css';
+@import '@fontsource/atkinson-hyperlegible-next/600.css';
+@import '@fontsource/atkinson-hyperlegible-next/700.css';
+@import 'tailwindcss';
+
+/*
+  Design tokens
+  - Atkinson Hyperlegible Next: designed to keep 1/l/I and 0/O distinct, which
+    matters when a clinician reads doses and IDs at a glance.
+  - Clinic blue for primary actions, teal for clinical/secondary emphasis,
+    green reserved for "healthy / done" states.
+*/
+@theme {
+  --font-sans: 'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, sans-serif;
+  --font-rx: 'Georgia', 'Times New Roman', serif;
+
+  --color-canvas: #f4f7fa;
+  --color-surface: #ffffff;
+  --color-sunken: #eef3f7;
+  --color-line: #dde5ec;
+  --color-line-strong: #c7d3dd;
+
+  --color-ink: #13283b;
+  --color-ink-soft: #3d5163;
+  --color-muted: #64768a;
+
+  --color-brand-50: #eef4fc;
+  --color-brand-100: #d9e6f7;
+  --color-brand-200: #b3cdee;
+  --color-brand-500: #2f6dbf;
+  --color-brand-600: #1e5aa8;
+  --color-brand-700: #18498a;
+  --color-brand-800: #133a6e;
+
+  --color-teal-50: #e9f6f6;
+  --color-teal-100: #cdebeb;
+  --color-teal-500: #13979a;
+  --color-teal-600: #0f8083;
+  --color-teal-700: #0c6668;
+
+  --color-ok-50: #ecf6f0;
+  --color-ok-100: #d2ebdc;
+  --color-ok-600: #3e9b6e;
+  --color-ok-700: #2f7a56;
+
+  --color-warn-50: #fdf5e7;
+  --color-warn-100: #f8e5c0;
+  --color-warn-600: #b7791f;
+  --color-warn-700: #8f5e17;
+
+  --color-danger-50: #fcefee;
+  --color-danger-100: #f6d5d3;
+  --color-danger-600: #c2413a;
+  --color-danger-700: #9c322c;
+
+  --shadow-panel: 0 1px 2px rgb(19 40 59 / 0.05), 0 1px 1px rgb(19 40 59 / 0.03);
+  --shadow-pop: 0 12px 32px -8px rgb(19 40 59 / 0.22), 0 2px 6px rgb(19 40 59 / 0.08);
+
+  --radius-panel: 14px;
+  --radius-control: 9px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: 'tnum' 0;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+  ::selection {
+    background: var(--color-brand-100);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Print: only the element marked .print-area is printed, on clean white. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-toast-in {
+  animation: toast-in 180ms ease-out;
+}
