@@ -13,6 +13,18 @@ import { AppError, ConflictError, NotFoundError, UnauthorizedError, ValidationEr
 export const RPC_PREFIX = '/api/rpc/'
 export const RESULT_HEADER = 'x-rpc-result'
 export const META_HEADER = 'x-rpc-meta'
+/**
+ * What the call actually changed, as reported by the services' change bus on the
+ * server (e.g. "patients" or "*"). Absent when nothing changed. The browser re-emits
+ * exactly these, so open lists refresh the same way as in browser mode.
+ */
+export const CHANGES_HEADER = 'x-rpc-changes'
+
+/** Collapses change events: "*" (everything) wins; otherwise unique names in order. */
+export function normaliseChanges(changes: Iterable<string>): string[] {
+  const unique = [...new Set([...changes].map((c) => c.trim()).filter((c) => /^[*a-zA-Z_-]+$/.test(c)))]
+  return unique.includes('*') ? ['*'] : unique
+}
 
 type BlobRef = { $blob: number; name?: string; type?: string; arraybuffer?: boolean }
 
@@ -85,8 +97,10 @@ export async function decodeArgs(req: Request): Promise<unknown[]> {
 
 /* ---------- results ---------- */
 
-export function encodeResult(result: unknown): Response {
-  const headers = { 'cache-control': 'no-store' }
+export function encodeResult(result: unknown, changes: string[] = []): Response {
+  const headers: Record<string, string> = { 'cache-control': 'no-store' }
+  const changed = normaliseChanges(changes)
+  if (changed.length) headers[CHANGES_HEADER] = changed.join(',')
   if (isBlob(result)) {
     return new Response(result, { status: 200, headers: { ...headers, 'content-type': result.type || 'application/octet-stream', [RESULT_HEADER]: 'blob' } })
   }

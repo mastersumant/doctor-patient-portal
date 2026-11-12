@@ -34,13 +34,13 @@ Step-by-step Clerk, Supabase and Netlify setup: [docs/setup-guide.md](docs/setup
 
 ```bash
 # .env.local: VITE_STORAGE_TYPE=API, VITE_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY
-npm run dev:api        # API on :8787 with an embedded Postgres (or your Supabase via DATABASE_URL)
-npm run dev            # app on :5173, /api proxied to the API
+# (+ DATABASE_URL or MIGRATION_DATABASE_URL for Supabase; otherwise an embedded Postgres)
+npm run dev            # app on :5173; in server mode it runs the API too
 ```
 
 ### Deploy
 
-Create a Supabase project, run `npm run db:migrate`, set `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` and `DATABASE_URL` in Netlify, and deploy. `/api/health` confirms the database connection.
+Create a Supabase project, run `npm run db:migrate`, import the GitHub repo into Netlify, set `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` and `DATABASE_URL` there, and deploy. `/api/health` confirms the database connection. Every push to the production branch redeploys; `.github/workflows/ci.yml` runs the type check, lint, tests and a server-mode build on each push.
 
 ## What's included
 
@@ -70,7 +70,7 @@ Cross-cutting: doctor-level data isolation enforced in every repository call, so
 | `npm test` | Unit and integration tests (Vitest; services on both in-memory and IndexedDB storage) |
 | `npm run typecheck` | TypeScript only |
 | `npm run lint` | oxlint |
-| `npm run dev:api` | Local API server (same code as the Netlify Function) |
+| `npm run dev:api` | Optional standalone API on :8787 (`npm run dev` already runs it in server mode) |
 | `npm run db:migrate` | Create the tables in Supabase / Postgres |
 | `npm run generate:data` | Regenerate `data/*.xlsx`, `docs/schema.*.sql` and the Supabase migration from the seed and table specs |
 
@@ -112,7 +112,7 @@ doctor-patient-portal/
 
 ## Testing
 
-`npm test` runs 60 tests. The service suite runs against in-memory, IndexedDB **and real PostgreSQL** (PGlite, Postgres compiled to WebAssembly), covering CRUD, validation, doctor isolation at service and repository level, visit → follow-up → appointment links, prescription versioning and issue-time snapshots, appointment overlap rules, upload sniffing, the audit trail, seed integrity (all foreign keys valid, no overlapping slots), persistence across a new database connection, and Excel export → import round-trips including rejection of broken or foreign workbooks. The API suite drives the browser's HTTP client through the API handler into Postgres (auth, isolation, error mapping, file upload and download, Excel, method allow-list), and checks Clerk token verification with real signed tokens. The Netlify-bundled function was also executed end to end.
+`npm test` runs 70 tests. The service suite runs against in-memory, IndexedDB **and real PostgreSQL** (PGlite, Postgres compiled to WebAssembly), covering CRUD, validation, doctor isolation at service and repository level, visit → follow-up → appointment links, prescription versioning and issue-time snapshots, appointment overlap rules, upload sniffing, the audit trail, seed integrity (all foreign keys valid, no overlapping slots), persistence across a new database connection, and Excel export → import round-trips including rejection of broken or foreign workbooks. The API suite drives the browser's HTTP client through the API handler into Postgres (auth, isolation, error mapping, file upload and download, Excel, method allow-list), and checks Clerk token verification with real signed tokens. The Netlify-bundled function was also executed end to end.
 
 The UI was also exercised end to end in Chrome (registration, visits, prescriptions and PDF, revisions, booking and overlap blocking, reports and Excel export, import, uploads, reload persistence, switching doctors, phone layout) with no console errors.
 

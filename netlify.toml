@@ -2,9 +2,17 @@
 #
 # Set these in Netlify → Site configuration → Environment variables (never commit them):
 #   VITE_CLERK_PUBLISHABLE_KEY   pk_… (used when building the frontend)
-#   CLERK_SECRET_KEY             sk_… (used only by the API function)
-#   DATABASE_URL                 Supabase "Transaction pooler" connection string (port 6543)
-# Optional: CLERK_AUTHORIZED_PARTIES (comma-separated site origins), CLERK_JWT_KEY.
+#   CLERK_SECRET_KEY             sk_… (used only by the API function; mark as secret)
+#   DATABASE_URL                 Supabase "Transaction pooler" connection string, port 6543 (mark as secret)
+# Optional: CLERK_AUTHORIZED_PARTIES (comma-separated origins to pin), CLERK_JWT_KEY.
+#
+# The build stops with a clear message if VITE_CLERK_PUBLISHABLE_KEY is missing, or if a
+# secret was put in a VITE_ variable (those are published in the browser bundle).
+#
+# The production branch is chosen in Netlify (Site configuration → Build & deploy →
+# Branches and deploy contexts). Branch deploys and deploy previews use the same
+# environment variables, so they read and write the same database unless you give
+# DATABASE_URL a different value for those deploy contexts.
 
 [build]
   command = "npm run build"

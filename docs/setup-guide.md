@@ -36,21 +36,26 @@ In a development instance, Google and Facebook work immediately with Clerk's sha
 
 ## 3. Run locally with the server (server mode)
 
-Add to `.env.local`:
+Without `VITE_STORAGE_TYPE=API`, the app runs in **browser mode** even when Clerk sign-in works: records are saved in that browser only and never reach the database. `npm run dev` prints which storage it is using.
+
+Add to `.env.local` (`CLERK_SECRET_KEY` must be there too):
 
 ```bash
 VITE_STORAGE_TYPE=API
-# DATABASE_URL=...   leave empty to use an embedded Postgres stored in ./.pglite
+# Which database the local API uses:
+#   DATABASE_URL, else MIGRATION_DATABASE_URL  → that database (your Supabase project)
+#   neither                                    → an embedded Postgres stored in ./.pglite
 ```
 
-Then, in two terminals:
+Then run (restart it after editing `.env.local`):
 
 ```bash
-npm run dev:api           # API on http://localhost:8787 (same code as the Netlify Function)
-npm run dev               # app on http://localhost:5173, /api is proxied to 8787
+npm run dev               # app and API on http://localhost:5173
 ```
 
-Sign in with Clerk. On first sign-in the app asks for the clinic profile and can load sample patients. To work against your Supabase project instead of the embedded database, set `DATABASE_URL` (section 4).
+In server mode the dev server runs the API itself (the same code as the Netlify Function) and prints `Storage: server` and the database it uses. If `npm run dev:api` (the standalone API on port 8787) is already running when `npm run dev` starts, `/api` is forwarded to it instead.
+
+Sign in with Clerk. On first sign-in the app asks for the clinic profile and can load sample patients. **Settings → Data and storage** shows "Server database" when the setup is right.
 
 ## 4. Deploy: Supabase + Netlify
 
@@ -77,13 +82,16 @@ MIGRATION_DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-...poo
 npm run db:migrate         # prints "Database schema created."
 ```
 
-or open **SQL Editor** in Supabase, paste the contents of `supabase/migrations/20261112000000_clinicdesk_init.sql`, and run it.
+or open **SQL Editor** in Supabase, paste the contents of `supabase/migrations/20261112000000_clinicdesk_init.sql`, and run it. (Use the SQL Editor if your office network or VPN blocks database ports; `npm run db:migrate` afterwards just reports "already up to date".)
+
+Don't use the **Project URL** (`https://<project-ref>.supabase.co`) or its host: that is the API address and doesn't accept database connections. The pooler strings' host ends in `.pooler.supabase.com` and the user is `postgres.<project-ref>`. `npm run db:migrate` checks for these mistakes before connecting.
 
 The tables live in their own `clinicdesk` schema with row-level security on and no policies, so Supabase's public Data API (and its anon key) can't read them. Only the Netlify Function, connecting with the database password, can.
 
 ### 4.3 Configure and deploy on Netlify
 
-1. Push the repo to GitHub, then in Netlify: **Add new project → Import an existing project → GitHub** → your repo. `netlify.toml` supplies the build command, the function, and `VITE_STORAGE_TYPE=API`.
+1. Push the repo to GitHub, then in Netlify: **Add new project → Import an existing project → GitHub** → your repo. `netlify.toml` supplies the build command, the function, and `VITE_STORAGE_TYPE=API`, so leave the build settings Netlify shows as they are.
+   **Branch to deploy:** Netlify deploys the branch you pick here as production (you can change it later under Site configuration → Build & deploy → Branches and deploy contexts). Either pick the branch your work is on, or merge it into `master` and deploy `master`.
 2. **Site configuration → Environment variables**, add:
 
    | Key | Value |
@@ -92,9 +100,11 @@ The tables live in their own `clinicdesk` schema with row-level security on and 
    | `CLERK_SECRET_KEY` | `sk_…` (mark as secret) |
    | `DATABASE_URL` | Supabase **Transaction pooler** string, port 6543 (mark as secret) |
 
-   Optional: `CLERK_AUTHORIZED_PARTIES` = your site origin, e.g. `https://your-site.netlify.app`. When unset, the function uses the site URLs Netlify provides.
+   Optional: `CLERK_AUTHORIZED_PARTIES` = exact origins to accept sign-in tokens from, e.g. `https://clinic.example.com`. When unset, the function accepts tokens issued on the site the request arrives on, so the main URL, branch deploys and deploy previews all work.
 
-3. Deploy (or **Trigger deploy** after changing variables).
+   The build stops with a clear message if `VITE_CLERK_PUBLISHABLE_KEY` is missing, or if a secret was put in a `VITE_` variable.
+
+3. Deploy (or **Deploys → Trigger deploy** after changing variables: Netlify reads them only when it builds). Every push to the production branch deploys again automatically.
 4. Check the wiring: open `https://<your-site>/api/health`. You should see `{"status":"ok","database":"ok"}`.
 5. Open the site, sign in, complete the clinic profile. Records saved from any device now appear on all of them.
 
@@ -102,7 +112,11 @@ The tables live in their own `clinicdesk` schema with row-level security on and 
 
 | Symptom | Fix |
 |---|---|
-| `/api/health` shows `"database":"unreachable"` | Check `DATABASE_URL` is the transaction-pooler string with the right password, then redeploy |
+| `db:migrate` says `CONNECT_TIMEOUT …supabase.co:5432` | The host is the project's API address. Copy **Connect → Session pooler** instead (host `….pooler.supabase.com`, user `postgres.<project-ref>`) |
+| `db:migrate` times out with a `….pooler.supabase.com` host | Your network blocks outgoing database ports. Use a different network, or paste the migration file into Supabase's **SQL Editor** |
+| `Tenant or user not found` | The user must be `postgres.<project-ref>`; copy the whole pooler string again |
+| `password authentication failed` | Use the database password (Project Settings → Database, where you can reset it), percent-encoding special characters |
+| `/api/health` shows `"database":"unreachable"` | Check `DATABASE_URL` is the transaction-pooler string with the right password, then redeploy. Netlify's function log (Logs → Functions → api) says what failed |
 | Every request says "Sign in to continue" | `CLERK_SECRET_KEY` must be from the same Clerk instance as the publishable key; if you set `CLERK_AUTHORIZED_PARTIES`, it must include the exact site origin |
 | "The server is missing …" | Add the named variable in Netlify and redeploy |
 | Uploads fail for large files | Uploads through the function are limited to 4 MB per file |
@@ -113,7 +127,7 @@ The tables live in their own `clinicdesk` schema with row-level security on and 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Frontend dev server |
-| `npm run dev:api` | Local API server (embedded Postgres unless `DATABASE_URL` is set) |
+| `npm run dev:api` | Optional standalone API on :8787 (`npm run dev` already runs the API in server mode) |
 | `npm run db:migrate` | Create the tables in the database at `MIGRATION_DATABASE_URL` / `DATABASE_URL` |
 | `npm run build` | Type-check and build to `dist/` |
 | `npm test` | 60 tests: services on memory, IndexedDB and Postgres; HTTP API end to end; Clerk token checks |

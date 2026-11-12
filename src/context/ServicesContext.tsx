@@ -93,20 +93,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [doctorError, setDoctorError] = useState<string | null>(null)
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
 
+  // One profile request at a time: events that arrive meanwhile share a single follow-up.
+  const inFlight = useRef<Promise<void> | null>(null)
+  const again = useRef(false)
+
   const refreshDoctor = useCallback(async () => {
     if (!identity) {
       setDoctor(null)
       setLoadedFor(null)
       return
     }
-    try {
-      setDoctor(await services.doctor.ensureProfile())
-      setDoctorError(null)
-    } catch (err) {
-      setDoctorError(errorMessage(err))
-    } finally {
-      setLoadedFor(identity.userId)
+    if (inFlight.current) {
+      again.current = true
+      return inFlight.current
     }
+    const run = async () => {
+      do {
+        again.current = false
+        try {
+          setDoctor(await services.doctor.ensureProfile())
+          setDoctorError(null)
+        } catch (err) {
+          setDoctorError(errorMessage(err))
+        } finally {
+          setLoadedFor(identity.userId)
+        }
+      } while (again.current)
+    }
+    inFlight.current = run().finally(() => {
+      inFlight.current = null
+    })
+    return inFlight.current
   }, [identity, services])
 
   useEffect(() => {

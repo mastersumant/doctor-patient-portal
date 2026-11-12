@@ -5,6 +5,7 @@
 import { generateKeyPairSync, sign } from 'node:crypto'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { createHttpServices } from '@/data/http/httpServices'
+import { createMemoryRepositories } from '@/data/repositories/memory/memoryRepositories'
 import { makeTinyPdf } from '@/data/seed/tinyPdf'
 import type { Services } from '@/services'
 import { ChangeBus, type SessionIdentity } from '@/services/context'
@@ -22,6 +23,7 @@ afterAll(() => pg.stop())
 const USERS: Record<string, SessionIdentity> = {
   'token-a': { userId: 'user_alpha', fullName: 'Dr. Alpha Rao', email: 'alpha@example.com', imageUrl: '' },
   'token-b': { userId: 'user_beta', fullName: 'Dr. Beta Iyer', email: 'beta@example.com', imageUrl: '' },
+  'token-new': { userId: 'user_new', fullName: 'Dr. New Sen', email: 'new@example.com', imageUrl: '' },
 }
 
 const handler = createApiHandler({
@@ -193,6 +195,54 @@ describe('HTTP API on Postgres', () => {
     expect((err as Error).message).toMatch(/4 MB/)
   })
 
+  it('reports only real changes, so the browser refreshes exactly as in browser mode', async () => {
+    const bus = new ChangeBus()
+    const events: string[][] = []
+    bus.subscribe((e) => events.push(e))
+    const c = clientFor('token-new', bus)
+
+    await c.doctor.ensureProfile() // first sign-in: creates the profile
+    expect(events).toEqual([['doctor']])
+    await c.doctor.ensureProfile() // already exists: nothing changed
+    await c.doctor.getCurrent()
+    await c.patients.list()
+    expect(events).toEqual([['doctor']])
+
+    await c.patients.create(patient())
+    expect(events.at(-1)).toEqual(['patients'])
+    await c.data.loadSampleData()
+    expect(events.at(-1)).toEqual(['*'])
+  })
+
+  it("doesn't loop when the workspace refreshes the profile on every change (server mode regression)", async () => {
+    // Mirrors WorkspaceProvider: on "doctor" or "*" events, call ensureProfile again.
+    const bus = new ChangeBus()
+    const c = clientFor('token-new', bus)
+    let calls = 0
+    bus.subscribe((e) => {
+      if (e.includes('doctor') || e.includes('*')) {
+        calls++
+        void c.doctor.ensureProfile()
+      }
+    })
+    await c.doctor.ensureProfile()
+    await c.doctor.updateProfile({
+      fullName: 'Dr. New Sen',
+      email: 'new@example.com',
+      specialization: 'General Physician',
+      qualifications: 'MBBS',
+      registrationNumber: 'KMC-12345',
+      clinicName: 'Iyer Clinic',
+      clinicAddress: '',
+      contactNumber: '',
+      experienceYears: '',
+    })
+    await c.data.loadSampleData()
+    await new Promise((r) => setTimeout(r, 300)) // let any chain of follow-up calls play out
+    // first-time creation, the profile update, and the sample data: one refresh each
+    expect(calls).toBe(3)
+  })
+
   it('exports and re-imports a workspace as Excel over HTTP', async () => {
     const bus = new ChangeBus()
     const events: string[][] = []
@@ -253,10 +303,45 @@ describe('Clerk token verification', () => {
     expect(await verify('not.a.jwt')).toBeNull()
   })
 
-  it('derives allowed origins from Netlify’s site URLs', () => {
-    expect(authorizedPartiesFromEnv({ URL: 'https://clinic.netlify.app', CONTEXT: 'production' })).toEqual(['https://clinic.netlify.app'])
+  it('reads an explicit allow-list from CLERK_AUTHORIZED_PARTIES', () => {
     expect(authorizedPartiesFromEnv({ CLERK_AUTHORIZED_PARTIES: 'https://a.com/, https://b.com' })).toEqual(['https://a.com', 'https://b.com'])
-    expect(authorizedPartiesFromEnv({ URL: 'https://x.netlify.app', CONTEXT: 'deploy-preview' })).toContain('http://localhost:5173')
+    expect(authorizedPartiesFromEnv({ URL: 'https://clinic.netlify.app' })).toEqual([])
+  })
+
+  describe('without an explicit allow-list (Netlify gives functions only URL at runtime)', () => {
+    const site = createClerkVerifier({ secretKey: 'sk_test_unused', jwtKey: pem, siteUrl: 'https://clinic.netlify.app' })
+    const branch = 'https://feature-develop--clinic.netlify.app'
+
+    it('accepts tokens minted on the site the request arrived on: main URL, branch deploys, previews', async () => {
+      expect(await site(token({ sub: 'u1', azp: 'https://clinic.netlify.app' }), { origin: 'https://clinic.netlify.app' })).toEqual({ userId: 'u1' })
+      expect(await site(token({ sub: 'u1', azp: branch }), { origin: branch })).toEqual({ userId: 'u1' })
+      expect(await site(token({ sub: 'u1', azp: 'http://localhost:5173' }), { origin: 'http://localhost:5173' })).toEqual({ userId: 'u1' })
+    })
+
+    it('refuses tokens minted on another site, including localhost, when the request is to production', async () => {
+      expect(await site(token({ sub: 'u1', azp: 'https://evil.example' }), { origin: 'https://clinic.netlify.app' })).toBeNull()
+      expect(await site(token({ sub: 'u1', azp: 'http://localhost:5173' }), { origin: 'https://clinic.netlify.app' })).toBeNull()
+      expect(await site(token({ sub: 'u1', azp: branch }), { origin: 'https://evil.example' })).toBeNull()
+    })
+
+    it('an explicit allow-list overrides the request origin', async () => {
+      const pinned = createClerkVerifier({ secretKey: 'sk_test_unused', jwtKey: pem, authorizedParties: ['https://clinic.com'] })
+      expect(await pinned(token({ sub: 'u1', azp: branch }), { origin: branch })).toBeNull()
+      expect(await pinned(token({ sub: 'u1', azp: 'https://clinic.com' }), { origin: branch })).toEqual({ userId: 'u1' })
+    })
+  })
+
+  it('the API handler passes the request origin to the verifier', async () => {
+    const seen: (string | undefined)[] = []
+    const h = createApiHandler({
+      repos: createMemoryRepositories(),
+      verify: async (_t, req) => {
+        seen.push(req?.origin)
+        return null
+      },
+    })
+    await h(new Request('https://feature-develop--clinic.netlify.app/api/rpc/patients/list', { method: 'POST', headers: { authorization: 'Bearer x' } }))
+    expect(seen).toEqual(['https://feature-develop--clinic.netlify.app'])
   })
 })
 

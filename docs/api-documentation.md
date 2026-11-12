@@ -36,7 +36,7 @@ All responses carry `Cache-Control: no-store`.
 ## Identity and isolation
 
 - The doctor ID for every query is the `sub` claim of the verified Clerk token. Nothing in the request body or headers can change it.
-- The token's signature, expiry and issuing origin (`azp`) are checked with `@clerk/backend`. Allowed origins come from `CLERK_AUTHORIZED_PARTIES`, or default to the site URLs Netlify provides.
+- The token's signature, expiry and issuing origin (`azp`) are checked with `@clerk/backend`. Allowed origins come from `CLERK_AUTHORIZED_PARTIES` when set; otherwise a token is accepted only if it was issued on the same site the request arrived on (the browser calls `/api` on the site it is showing), so the main URL, branch deploys and deploy previews work and tokens from any other site are refused.
 - Optional headers `x-user-name`, `x-user-email`, `x-user-image` (base64url) prefill a brand-new doctor profile. They are display hints only.
 - Every repository statement includes `doctor_id = <verified user>`.
 

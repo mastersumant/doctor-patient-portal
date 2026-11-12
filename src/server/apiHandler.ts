@@ -86,7 +86,7 @@ export function createApiHandler(opts: ApiHandlerOptions): (req: Request) => Pro
     try {
       const auth = req.headers.get('authorization') ?? ''
       const token = /^Bearer\s+(.+)$/i.exec(auth)?.[1]
-      const user = token ? await opts.verify(token) : null
+      const user = token ? await opts.verify(token, { origin: url.origin }) : null
       if (!user) throw new UnauthorizedError()
 
       const length = Number(req.headers.get('content-length') ?? 0)
@@ -101,12 +101,17 @@ export function createApiHandler(opts: ApiHandlerOptions): (req: Request) => Pro
       }
 
       const identity = displayHints(req, user.userId)
-      const services: Services = createServices(opts.repos, { getIdentity: () => identity }, new ChangeBus(), {
+      // Collect what the services report as changed, so the browser refreshes only after
+      // real writes (a profile check that changes nothing must not trigger refreshes).
+      const bus = new ChangeBus()
+      const changes: string[] = []
+      bus.subscribe((entities) => changes.push(...entities))
+      const services: Services = createServices(opts.repos, { getIdentity: () => identity }, bus, {
         maxUploadBytes: opts.maxUploadBytes ?? DEFAULT_MAX_UPLOAD,
       })
       const target = services[service as keyof Services] as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>
       const result = await target[method](...args)
-      return encodeResult(result)
+      return encodeResult(result, changes)
     } catch (err) {
       if (!(err instanceof AppError)) {
         // Name, code and message only: no request data, no row values.

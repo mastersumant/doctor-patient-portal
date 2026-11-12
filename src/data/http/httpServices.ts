@@ -8,7 +8,7 @@ import { ChangeBus, type SessionIdentity } from '@/services/context'
 import { AppError, UnauthorizedError } from '@/services/errors'
 import { PrescriptionService } from '@/services/prescriptionService'
 import { RPC_METHODS, type RpcService } from '@/services/rpcMethods'
-import { decodeResult, encodeArgs, errorFromBody, RPC_PREFIX, toBase64Url } from '@/services/rpcProtocol'
+import { CHANGES_HEADER, decodeResult, encodeArgs, errorFromBody, normaliseChanges, RPC_PREFIX, toBase64Url } from '@/services/rpcProtocol'
 import { VisitService } from '@/services/visitService'
 
 export interface HttpServicesOptions {
@@ -57,8 +57,9 @@ export function createHttpServices(opts: HttpServicesOptions): Services {
       throw errorFromBody(res.status, payload)
     }
     const result = await decodeResult(res)
-    const kind = (RPC_METHODS[service] as Record<string, string>)[method]
-    if (kind === 'write') bus.emit(service === 'data' ? '*' : service === 'doctor' ? 'doctor' : service)
+    // Re-emit only what the server says actually changed (same events as browser mode).
+    const changes = normaliseChanges((res.headers.get(CHANGES_HEADER) ?? '').split(','))
+    if (changes.length) bus.emit(...changes)
     return result
   }
 
